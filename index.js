@@ -10,12 +10,14 @@ const COLL_NAME = 'test'
 const IMAGES_DIR = './resources/images'
 const REF_DIR = './resources/ref'
 
+// const refmap = new Map()
+// refmap.unset('1')
+// console.log(refmap)
+
 // createRefCollection(COLL_NAME, REF_DIR)
 // .then(()=>recognizeFacesInImage(COLL_NAME, IMAGES_DIR))
 
 recognizeFacesInImage(COLL_NAME, IMAGES_DIR)
-
-
 
 function createRefCollection(collection, dir) {
     return createCollection(collection)
@@ -27,45 +29,62 @@ function createRefCollection(collection, dir) {
                 return { FaceId: face.FaceId, ExternalImageId: face.ExternalImageId }
             })
         })
-        // .then(() => {
-        //     console.log(indexedFaces)
-        // })
+    // .then(() => {
+    //     console.log(indexedFaces)
+    // })
+}
+
+function getNameFromRef(RefExId) {
+    return RefExId.slice(4, RefExId.length - 2)
 }
 
 function recognizeFacesInImage(collection, dir) {
-    const imagePaths = getJpgPaths(dir).slice(0,5)
+    const imagePaths = getJpgPaths(dir).slice(0, 10)
     Promise.all(imagePaths.map(imagePath => searchFacesInImage(collection, imagePath)))
-    .then(data => {
-        data.forEach(d => {
-            console.log(`Image: ${d.ImageName}`)
-            console.log(d.SearchResult)
+        // Clean up data
+        .then(data => {
+            const FaceIds = data.map(d => d.SearchResult.map(s => s.SearchedFaceId))
+                .reduce((a, b) => a.concat(b), [])
+            const params = {
+                CollectionId: collection,
+                FaceIds
+            }
+            RK.deleteFaces(params)
+            return data
         })
-        return data
-    })
-    .then(data => {
-        const FaceIds = data.map(d => d.SearchResult.map(s => s.SearchedFaceId))
-            .reduce((a, b) => a.concat(b), [])
-        const params = {
-            CollectionId: collection,
-            FaceIds
-        }
-        return RK.deleteFaces(params).promise()
-    })
+        .then(data => {
+            result = data.map(d => ({
+                ImageName: d.ImageName,
+                Faces: d.SearchResult.map(sr => sr.BestMatch).filter(m => m !== null).map(getNameFromRef)
+            }))
+            return result
+        })
+        .then(data => { // Reverse data
+            const m = new Map()
+            data.forEach(d => {
+                d.Faces.forEach(f => {
+                    if (!m.has(f)) m.set(f, [])
+                    m.get(f).push(d.ImageName)
+                })
+            });
+            return m
+        })
+        .then(d => { console.log(d) })
 }
 
 function searchFacesInImage(CollectionId, imagePath) {
-    const imageName = 'XXX_' + getFileName(imagePath)
-    return addFace(CollectionId, getImageParam(imagePath), imageName)
+    const imageName = getFileName(imagePath)
+    return addFace(CollectionId, getImageParam(imagePath), 'IMG_' + imageName)
         .then(d => d.FaceRecords.map(fr => fr.Face.FaceId))
         .then(FaceIds => Promise.all(FaceIds.map(FaceId => RK.searchFaces({ CollectionId, FaceId }).promise())))
         .then(data => ({
             ImageName: imageName,
             SearchResult: data.map(d => {
                 // d.FaceMatches = d.FaceMatches.filter(f => f.Face.ExternalImageId !== imageName)
-                d.FaceMatches = d.FaceMatches.filter(f => !/XXX_.*/.test(f.Face.ExternalImageId))
+                d.FaceMatches = d.FaceMatches.filter(f => !/IMG_.*/.test(f.Face.ExternalImageId))
                 return {
                     SearchedFaceId: d.SearchedFaceId,
-                    BestMatch: d.FaceMatches.length > 0 ? d.FaceMatches[0].Face.ExternalImageId : 'Unknown',
+                    BestMatch: d.FaceMatches.length > 0 ? d.FaceMatches[0].Face.ExternalImageId : null,
                     FaceMatches: d.FaceMatches.map(faceMatch => ({
                         Similarity: faceMatch.Similarity,
                         FaceId: faceMatch.Face.FaceId,
@@ -117,7 +136,7 @@ function addFace(CollectionId, Image, ExternalImageId) {
 
 async function addRefFace(collectionId, Image, ExternalImageId) {
     if (await isSingleFaceImage(Image)) {
-        return addFace(collectionId, Image, ExternalImageId)
+        return addFace(collectionId, Image, 'REF_' + ExternalImageId)
     } else {
         return null
     }
