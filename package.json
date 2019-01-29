@@ -1,0 +1,23 @@
+{
+  "name": "facerekognition",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "aws-sdk": "^2.394.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kritsr/FaceRekognition.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/kritsr/FaceRekognition/issues"
+  },
+  "homepage": "https://github.com/kritsr/FaceRekognition#readme"
+}

@@ -10,14 +10,17 @@ const COLL_NAME = 'test'
 const IMAGES_DIR = './resources/images'
 const REF_DIR = './resources/ref'
 
+const TPS_LIMIT = 40;
+let tps_cnt = 0;
+
 // const refmap = new Map()
 // refmap.unset('1')
 // console.log(refmap)
 
-// createRefCollection(COLL_NAME, REF_DIR)
-// .then(()=>recognizeFacesInImage(COLL_NAME, IMAGES_DIR))
+createRefCollection(COLL_NAME, REF_DIR)
+.then(()=>recognizeFacesInImage(COLL_NAME, IMAGES_DIR))
 
-recognizeFacesInImage(COLL_NAME, IMAGES_DIR)
+// recognizeFacesInImage(COLL_NAME, IMAGES_DIR)
 
 function createRefCollection(collection, dir) {
     return createCollection(collection)
@@ -39,7 +42,7 @@ function getNameFromRef(RefExId) {
 }
 
 function recognizeFacesInImage(collection, dir) {
-    const imagePaths = getJpgPaths(dir).slice(0, 10)
+    const imagePaths = getJpgPaths(dir)
     Promise.all(imagePaths.map(imagePath => searchFacesInImage(collection, imagePath)))
         // Clean up data
         .then(data => {
@@ -100,8 +103,8 @@ function createCollection(CollectionId) {
     return RK.listCollections().promise()
         .then(data => {
             if (data.CollectionIds.includes(CollectionId)) {
-                console.log(`Collection ${CollectionId} found.`)
-                console.log('Deleting')
+                // console.log(`Collection ${CollectionId} found.`)
+                // console.log('Deleting')
                 return deleteCollection(CollectionId)
             }
         })
@@ -128,7 +131,6 @@ function indexRefFaceDir(CollectionId, dirPath) {
 }
 
 function addFace(CollectionId, Image, ExternalImageId) {
-    console.log(`Adding ${ExternalImageId}`)
     let params = { CollectionId, Image }
     if (ExternalImageId) params.ExternalImageId = ExternalImageId
     return RK.indexFaces(params).promise()
