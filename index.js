@@ -18,7 +18,7 @@ let tps_cnt = 0;
 // console.log(refmap)
 
 createRefCollection(COLL_NAME, REF_DIR)
-.then(()=>recognizeFacesInImage(COLL_NAME, IMAGES_DIR))
+    .then(() => recognizeFacesInImage(COLL_NAME, IMAGES_DIR))
 
 // recognizeFacesInImage(COLL_NAME, IMAGES_DIR)
 
@@ -41,18 +41,29 @@ function getNameFromRef(RefExId) {
     return RefExId.slice(4, RefExId.length - 2)
 }
 
+function serializePromise(data, fn, prevPromise) {
+    if (undefined === prevPromise) prevPromise = Promise.resolve()
+    const result = [];
+    return data.reduce((a, d, i) => a.then(() => fn(d, i)).then(d => { result.push(d) }), prevPromise).then(() => result);
+}
+
 function recognizeFacesInImage(collection, dir) {
     const imagePaths = getJpgPaths(dir)
-    Promise.all(imagePaths.map(imagePath => searchFacesInImage(collection, imagePath)))
+    // Promise.all(imagePaths.map(imagePath => searchFacesInImage(collection, imagePath)))
+    serializePromise(imagePaths, (a, i) => searchFacesInImage(collection, a, i, imagePaths.length))
         // Clean up data
         .then(data => {
             const FaceIds = data.map(d => d.SearchResult.map(s => s.SearchedFaceId))
                 .reduce((a, b) => a.concat(b), [])
-            const params = {
-                CollectionId: collection,
-                FaceIds
+            let promise = Promise.resolve()
+            const itemsPerDelete = 4000
+            for (let i = 0; i < FaceIds.length; i += itemsPerDelete) {
+                const params = {
+                    CollectionId: collection,
+                    FaceIds: FaceIds.slice(i, i + itemsPerDelete)
+                }
+                promise = promise.then(() => RK.deleteFaces(params).promise()) // Max 4096 items
             }
-            RK.deleteFaces(params)
             return data
         })
         .then(data => {
@@ -75,11 +86,20 @@ function recognizeFacesInImage(collection, dir) {
         .then(d => { console.log(d) })
 }
 
-function searchFacesInImage(CollectionId, imagePath) {
+function searchFacesInImage(CollectionId, imagePath, i, n) {
     const imageName = getFileName(imagePath)
+    console.log(`Indexing ${imageName} ${i + 1}/${n}`)
     return addFace(CollectionId, getImageParam(imagePath), 'IMG_' + imageName)
         .then(d => d.FaceRecords.map(fr => fr.Face.FaceId))
-        .then(FaceIds => Promise.all(FaceIds.map(FaceId => RK.searchFaces({ CollectionId, FaceId }).promise())))
+        .then(FaceIds => {
+            console.log(`${FaceIds.length} faces found.`)
+            return FaceIds
+        })
+        .then(FaceIds => serializePromise(FaceIds, (FaceId, i) => {
+            console.log(`Searching face ${i + 1}/${FaceIds.length}`)
+            return RK.searchFaces({ CollectionId, FaceId }).promise()
+        }))
+        // .then(FaceIds => Promise.all(FaceIds.map(FaceId => RK.searchFaces({ CollectionId, FaceId }).promise())))
         .then(data => ({
             ImageName: imageName,
             SearchResult: data.map(d => {
