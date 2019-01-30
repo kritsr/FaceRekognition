@@ -9,6 +9,7 @@ const RK = new AWS.Rekognition({ apiVersion: '2016-06-27' })
 const COLL_NAME = 'test'
 const IMAGES_DIR = './resources/images'
 const REF_DIR = './resources/ref'
+const OUTPUT_DIR = './output'
 
 const TPS_LIMIT = 40;
 let tps_cnt = 0;
@@ -27,14 +28,20 @@ function createRefCollection(collection, dir) {
         // Index reference face
         .then(() => indexRefFaceDir(collection, dir))
         .then(data => {
-            indexedFaces = data.filter(d => d !== null).map(d => {
+            return data.filter(d => d !== null).map(d => {
                 let face = d.FaceRecords[0].Face
-                return { FaceId: face.FaceId, ExternalImageId: face.ExternalImageId }
+                return { FaceId: face.FaceId, ExternalImageId: face.ExternalImageId, Name: getNameFromRef(face.ExternalImageId) }
             })
         })
-    // .then(() => {
-    //     console.log(indexedFaces)
-    // })
+        .then((faces) => {
+            // Create output directory
+            if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR)
+            const dirSet = new Set(faces.map(f=>path.join(OUTPUT_DIR, f.Name)))
+            dirSet.forEach(dir=>{
+                if (!fs.existsSync(dir)) fs.mkdirSync(dir)
+            })
+            // console.log(faces)
+        })
 }
 
 function getNameFromRef(RefExId) {
@@ -73,6 +80,17 @@ function recognizeFacesInImage(collection, dir) {
             }))
             return result
         })
+        .then(data => {
+            // Copy to folder
+            data.forEach(d => {
+                const src = path.join(IMAGES_DIR, d.ImageName)
+                const dsts = d.Faces.map(f => path.join(OUTPUT_DIR, f, d.ImageName))
+                dsts.forEach(dst => {
+                    fs.copyFileSync(src, dst)
+                })
+            })
+            return data;
+        })
         .then(data => { // Reverse data
             const m = new Map()
             data.forEach(d => {
@@ -83,11 +101,11 @@ function recognizeFacesInImage(collection, dir) {
             });
             return m
         })
-        .then(d => { console.log(d) })
+        .then(d => { console.log(d); return d })
 }
 
 function searchFacesInImage(CollectionId, imagePath, i, n) {
-    const imageName = getFileName(imagePath)
+    const imageName = path.basename(imagePath)
     console.log(`Indexing ${imageName} ${i + 1}/${n}`)
     return addFace(CollectionId, getImageParam(imagePath), 'IMG_' + imageName)
         .then(d => d.FaceRecords.map(fr => fr.Face.FaceId))
