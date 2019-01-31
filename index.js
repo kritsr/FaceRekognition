@@ -1,9 +1,10 @@
 const fs = require('fs')
 const path = require('path')
 const AWS = require('aws-sdk')
-AWS.config.update({
-    region: 'us-west-2'
-})
+// AWS.config.update({
+//     region: 'us-west-2'
+// })
+AWS.config.loadFromPath('./aws-config.json')
 const RK = new AWS.Rekognition({ apiVersion: '2016-06-27' })
 
 const COLL_NAME = 'test'
