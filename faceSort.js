@@ -2,38 +2,40 @@ const fs = require('fs')
 const path = require('path')
 const AWS = require('aws-sdk')
 const Bottleneck = require('bottleneck')
-const AwsLimiter = new Bottleneck({
-    minTime: 1000 / 10
-})
+
 AWS.config.loadFromPath('./aws-config.json')
 const RK = new AWS.Rekognition({ apiVersion: '2016-06-27' })
 
 const COLL_NAME = 'faceSort'
 const IMG_DIR = './resources/images'
 const REF_DIR = './resources/ref'
-const DONE_DIR = './resource/done'
+const DONE_DIR = './resources/done'
+const NG_DIR = './output/NG'
 const OUTPUT_DIR = './output'
 const REF_PREFIX = 'REF_'
 const IMG_PREFIX = 'IMG_'
 const ITEM_PER_DELETE = 4000 // max 4096
 const GC_INTERVAL = 60000 // ms for gc to run
+const CONCUR_IMAGES_PROCESS = 10
+const AWS_API_TPS = 25
 
+const AwsLimiter = new Bottleneck({
+    minTime: Math.floor(1000 / AWS_API_TPS)
+})
 const CollectionId = COLL_NAME
 const GarbageFaceIds = []
 let GcTimeout
+let targetDirMap = new Map()
 
-// RK.deleteCollection({CollectionId}).promise().then(()=>console.log('FINN'))
-
-checkOrCreateRefCollection()
-// .then(() => recognizeFacesInImage(COLL_NAME, IMAGES_DIR))
+start()
 
 function isCollectionExists() {
     return RK.listCollections().promise().then(data => data.CollectionIds.includes(CollectionId))
 }
 
 function gc() {
-    deleteFaces(FaceIds)
-    setTimeout(GC_INTERVAL)
+    deleteFaces(GarbageFaceIds)
+    setTimeout(gc, GC_INTERVAL)
     clearTimeout
 }
 
@@ -50,6 +52,10 @@ DetectFaces, IndexFaces
 SearchFaceByImage, SearchFaces, and ListFaces
 */
 
+/*
+ExternalId [a-zA-Z0-9_.\-:]+
+*/
+
 function isRef(a) {
     return a.startsWith(REF_PREFIX)
 }
@@ -63,19 +69,29 @@ function removePrefix(name) {
 }
 
 function removeSuffix(name) {
-    return name.replace(/\d+$/,'')
+    return name.replace(/\d+$/, '')
 }
 
 function removePrefixAndSuffix(extId) {
     return removeSuffix(removePrefix(extId))
 }
 
-function checkOrCreateRefCollection() {
+function mkdir(dir) {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir)
+}
+
+function copyToDir(filePath, dir) {
+    const fileName = path.basename(filePath)
+    const dst = path.join(dir, fileName)
+    fs.copyFileSync(filePath, dst)
+}
+
+function start() {
     isCollectionExists(CollectionId)
         .then(isExists => {
             // Check if exist, return current list
             if (!isExists) return RK.createCollection({ CollectionId }).promise().then(() => [])
-            console.log('Old collection detected, resume work')
+            console.log('Old collection detected, resuming work')
             return RK.listFaces({ CollectionId }).promise().then(data => data.Faces)
         })
         .then(data => {
@@ -89,15 +105,17 @@ function checkOrCreateRefCollection() {
                 ),
                 // Clean IMG, etc
                 ...deleteFaces(data.filter(d => !isRef(d.ExternalImageId)).map(d => d.FaceId))
-            ]).then(()=>[...refIdFileMap.keys()].map(removeSuffix))
+            ]).then(() => [...refIdFileMap.keys()].map(removeSuffix))
         })
         .then((nameList) => {
             // Create output directory
-            if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR)
-            nameList.forEach(name => {
+            mkdir(OUTPUT_DIR)
+            mkdir(DONE_DIR)
+            targetDirMap = new Map(nameList.map(name => {
                 const dir = path.join(OUTPUT_DIR, name)
-                if (!fs.existsSync(dir)) fs.mkdirSync(dir)
-            })
+                mkdir(dir)
+                return [name, dir]
+            }))
         })
         .then(() => {
             const imgIdFileMap = getJpgPathMap(IMG_DIR)
@@ -106,141 +124,67 @@ function checkOrCreateRefCollection() {
         })
         .then(() => {
             clearTimeout(GcTimeout)
-            console.log('FINNNN')
+            console.log('All images processed. Clean up data')
+            return RK.deleteCollection({ CollectionId })
+        })
+        .then(() => {
+            console.log('FINISHED')
         })
 }
 
-function sortImages(){
-
+function sortImages(imgIdFileMap) {
+    // Limit concurrency
+    const limiter = new Bottleneck({
+        maxConcurrent: CONCUR_IMAGES_PROCESS
+    })
+    return Promise.all([...imgIdFileMap].map(e =>
+        limiter.schedule(() => sortImage(...e))
+    ))
 }
 
-// function createRefCollection(collection, dir) {
-//     return createCollection(collection)
-//         // Index reference face
-//         .then(() => indexRefFaceDir(collection, dir))
-//         .then(data => {
-//             return data.filter(d => d !== null).map(d => {
-//                 let face = d.FaceRecords[0].Face
-//                 return { FaceId: face.FaceId, ExternalImageId: face.ExternalImageId, Name: getNameFromRef(face.ExternalImageId) }
-//             })
-//         })
-//         .then((faces) => {
-//             // Create output directory
-//             if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR)
-//             const dirSet = new Set(faces.map(f => path.join(OUTPUT_DIR, f.Name)))
-//             dirSet.forEach(dir => {
-//                 if (!fs.existsSync(dir)) fs.mkdirSync(dir)
-//             })
-//             // console.log(faces)
-//         })
-// }
+function sortImage(id, imagePath) {
+    console.log(`Start ${id}`)
+    return searchPersonsInImage(imagePath)
+        .then(persons => { // Copy image to output
+            persons = persons.filter(p => targetDirMap.has(p))
+            persons.forEach(person => {
+                copyToDir(imagePath, targetDirMap.get(person))
+            })
+            if (persons.length == 0) {
+                mkdir(NG_DIR)
+                copyToDir(imagePath, NG_DIR)
+            }
+        })
+        .then(() => { // Move image to done (marked as done)
+            const fileName = path.basename(imagePath, id)
+            const dst = path.join(DONE_DIR, fileName)
+            fs.renameSync(imagePath, dst)
+        })
+}
 
-// function getNameFromRef(RefExId) {
-//     return RefExId.slice(4, RefExId.length - 2)
-// }
+// Return array of name
+function searchPersonsInImage(imagePath, id) {
+    let faceIds = []
+    return addImg(imagePath, id)
+        .then(data => { faceIds = data.FaceRecords.map(fr => fr.Face.FaceId) })
+        .then(() => Promise.all(faceIds.map(searchFaceName)))
+        .then(data => {
+            GarbageFaceIds.push(...faceIds)
+            return data
+        })
+}
 
-// function recognizeFacesInImage(collection, dir) {
-//     const imagePaths = getJpgPaths(dir)
-//     Promise.all(imagePaths.map((imagePath, i) => searchFacesInImage(collection, imagePath, i, imagePaths.length)))
-//         // serializePromise(imagePaths, (a, i) => searchFacesInImage(collection, a, i, imagePaths.length))
-//         // Clean up data
-//         .then(data => {
-//             const FaceIds = data.map(d => d.SearchResult.map(s => s.SearchedFaceId))
-//                 .reduce((a, b) => a.concat(b), [])
-//             const itemsPerDelete = 4000 // Max 4096 items
-//             for (let i = 0; i < FaceIds.length; i += itemsPerDelete) {
-//                 const params = {
-//                     CollectionId: collection,
-//                     FaceIds: FaceIds.slice(i, i + itemsPerDelete)
-//                 }
-//                 RK.deleteFaces(params)
-//             }
-//             return data
-//         })
-//         .then(data => {
-//             result = data.map(d => ({
-//                 ImageName: d.ImageName,
-//                 Faces: d.SearchResult.map(sr => sr.BestMatch).filter(m => m !== null).map(getNameFromRef)
-//             }))
-//             return result
-//         })
-//         .then(data => {
-//             // Copy to folder
-//             data.forEach(d => {
-//                 const src = path.join(IMAGES_DIR, d.ImageName)
-//                 const dsts = d.Faces.map(f => path.join(OUTPUT_DIR, f, d.ImageName))
-//                 dsts.forEach(dst => {
-//                     fs.copyFileSync(src, dst)
-//                 })
-//             })
-//             return data;
-//         })
-//         .then(data => { // Reverse data
-//             const m = new Map()
-//             data.forEach(d => {
-//                 d.Faces.forEach(f => {
-//                     if (!m.has(f)) m.set(f, [])
-//                     m.get(f).push(d.ImageName)
-//                 })
-//             });
-//             return m
-//         })
-//         .then(d => { console.log(d); return d })
-// }
-
-// function searchFacesInImage(CollectionId, imagePath, i, n) {
-//     const imageName = path.basename(imagePath)
-//     // console.log(`Indexing ${imageName} ${i + 1}/${n}`)
-//     return addFace(CollectionId, getImageParam(imagePath), 'IMG_' + imageName)
-//         .then(d => d.FaceRecords.map(fr => fr.Face.FaceId))
-//         .then(FaceIds => {
-//             console.log(`${FaceIds.length} faces found.`)
-//             return FaceIds
-//         })
-//         // .then(FaceIds => serializePromise(FaceIds, (FaceId, i) => {
-//         //     console.log(`Searching face ${i + 1}/${FaceIds.length}`)
-//         //     return RK.searchFaces({ CollectionId, FaceId }).promise()
-//         // }))
-//         .then(FaceIds => Promise.all(FaceIds.map((FaceId, i) => {
-//             // console.log(`Searching face ${i + 1}/${FaceIds.length}`)
-//             return RK.searchFaces({ CollectionId, FaceId }).promise()
-//         })))
-//         .then(data => ({
-//             ImageName: imageName,
-//             SearchResult: data.map(d => {
-//                 // d.FaceMatches = d.FaceMatches.filter(f => f.Face.ExternalImageId !== imageName)
-//                 d.FaceMatches = d.FaceMatches.filter(f => !/IMG_.*/.test(f.Face.ExternalImageId))
-//                 return {
-//                     SearchedFaceId: d.SearchedFaceId,
-//                     BestMatch: d.FaceMatches.length > 0 ? d.FaceMatches[0].Face.ExternalImageId : null,
-//                     FaceMatches: d.FaceMatches.map(faceMatch => ({
-//                         Similarity: faceMatch.Similarity,
-//                         FaceId: faceMatch.Face.FaceId,
-//                         ExternalImageId: faceMatch.Face.ExternalImageId
-//                     }))
-//                 }
-//             })
-//         }))
-// }
-
-
-// function createCollection(CollectionId) {
-//     return RK.listCollections().promise()
-//         .then(data => {
-//             if (data.CollectionIds.includes(CollectionId)) {
-//                 // console.log(`Collection ${CollectionId} found.`)
-//                 // console.log('Deleting')
-//                 return deleteCollection(CollectionId)
-//             }
-//         })
-//         .then(() => RK.createCollection({ CollectionId }).promise())
-//         .then(`Collection ${CollectionId} created`)
-// }
-
-// function deleteCollection(CollectionId) {
-//     return RK.deleteCollection({ CollectionId }).promise()
-// }
-
+// Return name
+function searchFaceName(FaceId) {
+    return AwsLimiter.schedule(() => RK.searchFaces({ CollectionId, FaceId }).promise())
+        .then(data => {
+            const ns = data.FaceMatches
+                .map(fm => fm.Face.ExternalImageId)
+                .filter(isRef)
+                .map(removePrefixAndSuffix)
+            return ns.length > 0 ? ns[0] : null
+        })
+}
 
 function deleteFaces(delFaceIds) {
     const promises = [];
@@ -270,10 +214,7 @@ function addFace(ImagePath, ExternalImageId, MaxFaces) {
     const Image = getImageParam(ImagePath);
     const params = { CollectionId, Image, ExternalImageId }
     if (MaxFaces) params.MaxFaces = MaxFaces
-    return AwsLimiter.schedule(() => {
-        console.log(`Uploading ${ImagePath}`)
-        return RK.indexFaces(params).promise()
-    })
+    return AwsLimiter.schedule(() => RK.indexFaces(params).promise())
 }
 
 function addRefFace(ImagePath, ExternalImageId) {
