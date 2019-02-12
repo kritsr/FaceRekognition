@@ -2,9 +2,11 @@ const fs = require('fs')
 const path = require('path')
 const AWS = require('aws-sdk')
 const Bottleneck = require('bottleneck')
+const _MultiProgress = require('multi-progress');
 
 AWS.config.loadFromPath('./aws-config.json')
 const RK = new AWS.Rekognition({ apiVersion: '2016-06-27' })
+const MultiProgress = new _MultiProgress()
 
 const COLL_NAME = 'faceSort'
 const IMG_DIR = './resources/images'
@@ -16,18 +18,31 @@ const REF_PREFIX = 'REF_'
 const IMG_PREFIX = 'IMG_'
 const ITEM_PER_DELETE = 4000 // max 4096
 const GC_INTERVAL = 60000 // ms for gc to run
-const CONCUR_IMAGES_PROCESS = 10
+const CONCUR_IMAGES_PROCESS = 15
 const AWS_API_TPS = 25
 
 const AwsLimiter = new Bottleneck({
-    minTime: Math.floor(1000 / AWS_API_TPS)
+    minTime: Math.floor(1000 / AWS_API_TPS),
+    maxConcurrent: CONCUR_IMAGES_PROCESS + AWS_API_TPS
 })
 const CollectionId = COLL_NAME
-const GarbageFaceIds = []
+
+let GarbageFaceIds = []
 let GcTimeout
 let targetDirMap = new Map()
 
-start()
+const pbars = []
+function initProgressBars(fileAmt) {
+    if (fileAmt <= 0) return
+    pbars.push(MultiProgress.newBar('Overall [:bar] :current/:total(:percent)', { total: fileAmt, complete: '#' }));
+    for (let i = 0; i < CONCUR_IMAGES_PROCESS; i++) {
+        const bar = MultiProgress.newBar(':label [:bar] :current/:total(:percent)', { total: 1 })
+        bar._tick = (x = 1) => { bar.tick(x, { label: bar.label }) }
+        bar.curr = 1
+        pbars.push(bar);
+    }
+    pbars.forEach(b => { b.tick(0) })
+}
 
 function isCollectionExists() {
     return RK.listCollections().promise().then(data => data.CollectionIds.includes(CollectionId))
@@ -35,8 +50,8 @@ function isCollectionExists() {
 
 function gc() {
     deleteFaces(GarbageFaceIds)
-    setTimeout(gc, GC_INTERVAL)
-    clearTimeout
+    GarbageFaceIds = []
+    GcTimeout = setTimeout(gc, GC_INTERVAL)
 }
 
 // Return a-b
@@ -124,8 +139,9 @@ function start() {
         })
         .then(() => {
             clearTimeout(GcTimeout)
+            MultiProgress.terminate()
             console.log('All images processed. Clean up data')
-            return RK.deleteCollection({ CollectionId })
+            return RK.deleteCollection({ CollectionId }).promise()
         })
         .then(() => {
             console.log('FINISHED')
@@ -137,14 +153,20 @@ function sortImages(imgIdFileMap) {
     const limiter = new Bottleneck({
         maxConcurrent: CONCUR_IMAGES_PROCESS
     })
+    initProgressBars(imgIdFileMap.size)
     return Promise.all([...imgIdFileMap].map(e =>
-        limiter.schedule(() => sortImage(...e))
+        limiter.schedule(() => sortImage(...e)).then(() => { pbars[0].tick() })
     ))
 }
 
 function sortImage(id, imagePath) {
-    console.log(`Start ${id}`)
-    return searchPersonsInImage(imagePath)
+    let bar = pbars.slice(1).find(bar => bar.curr == bar.total)
+    if (bar === undefined) bar = { _tick: () => { } }
+    bar.curr = 0
+    bar.total = bar.width = 1
+    bar.label = id
+    bar._tick(0)
+    return searchPersonsInImage(imagePath, id, bar)
         .then(persons => { // Copy image to output
             persons = persons.filter(p => targetDirMap.has(p))
             persons.forEach(person => {
@@ -160,14 +182,21 @@ function sortImage(id, imagePath) {
             const dst = path.join(DONE_DIR, fileName)
             fs.renameSync(imagePath, dst)
         })
+        .then(() => {
+            bar.curr = bar.total
+        })
 }
 
 // Return array of name
-function searchPersonsInImage(imagePath, id) {
+function searchPersonsInImage(imagePath, id, bar) {
     let faceIds = []
     return addImg(imagePath, id)
-        .then(data => { faceIds = data.FaceRecords.map(fr => fr.Face.FaceId) })
-        .then(() => Promise.all(faceIds.map(searchFaceName)))
+        .then(data => {
+            faceIds = data.FaceRecords.map(fr => fr.Face.FaceId)
+            bar.total = bar.width = faceIds.length
+            bar._tick(0)
+        })
+        .then(() => Promise.all(faceIds.map(f => searchFaceName(f, bar))))
         .then(data => {
             GarbageFaceIds.push(...faceIds)
             return data
@@ -175,13 +204,14 @@ function searchPersonsInImage(imagePath, id) {
 }
 
 // Return name
-function searchFaceName(FaceId) {
+function searchFaceName(FaceId, bar) {
     return AwsLimiter.schedule(() => RK.searchFaces({ CollectionId, FaceId }).promise())
         .then(data => {
             const ns = data.FaceMatches
                 .map(fm => fm.Face.ExternalImageId)
                 .filter(isRef)
                 .map(removePrefixAndSuffix)
+            bar._tick()
             return ns.length > 0 ? ns[0] : null
         })
 }
@@ -191,7 +221,6 @@ function deleteFaces(delFaceIds) {
     for (let i = 0; i < delFaceIds.length; i += ITEM_PER_DELETE) {
         promises.push(AwsLimiter.schedule(() => {
             const FaceIds = delFaceIds.slice(i, i + ITEM_PER_DELETE)
-            console.log(`Deleting ${FaceIds.length} faces`)
             return RK.deleteFaces({ CollectionId, FaceIds }).promise()
         }))
     }
@@ -214,7 +243,7 @@ function addFace(ImagePath, ExternalImageId, MaxFaces) {
     const Image = getImageParam(ImagePath);
     const params = { CollectionId, Image, ExternalImageId }
     if (MaxFaces) params.MaxFaces = MaxFaces
-    return AwsLimiter.schedule(() => RK.indexFaces(params).promise())
+    return AwsLimiter.schedule({ priority: 0 }, () => RK.indexFaces(params).promise())
 }
 
 function addRefFace(ImagePath, ExternalImageId) {
@@ -227,3 +256,6 @@ function addImg(ImagePath, ExternalImageId) {
 function getImageParam(path) {
     return { Bytes: fs.readFileSync(path) };
 }
+
+start()
+// RK.listCollections().promise().then(data=>{console.log(data)})
