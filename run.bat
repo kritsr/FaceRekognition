@@ -1,2 +1,2 @@
-.\node .
+.\node faceSort
 pause
