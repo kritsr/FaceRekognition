@@ -18,12 +18,11 @@ const REF_PREFIX = 'REF_'
 const IMG_PREFIX = 'IMG_'
 const ITEM_PER_DELETE = 4000 // max 4096
 const GC_INTERVAL = 60000 // ms for gc to run
-const CONCUR_IMAGES_PROCESS = 15
-const AWS_API_TPS = 25
+const CONCUR_IMAGES_PROCESS = 30
+const AWS_API_TPS = 30
 
 const AwsLimiter = new Bottleneck({
-    minTime: Math.floor(1000 / AWS_API_TPS),
-    maxConcurrent: CONCUR_IMAGES_PROCESS + AWS_API_TPS
+    minTime: Math.floor(1000 / AWS_API_TPS)
 })
 const CollectionId = COLL_NAME
 
@@ -243,7 +242,7 @@ function addFace(ImagePath, ExternalImageId, MaxFaces) {
     const Image = getImageParam(ImagePath);
     const params = { CollectionId, Image, ExternalImageId }
     if (MaxFaces) params.MaxFaces = MaxFaces
-    return AwsLimiter.schedule({ priority: 0 }, () => RK.indexFaces(params).promise())
+    return AwsLimiter.schedule(() => RK.indexFaces(params).promise())
 }
 
 function addRefFace(ImagePath, ExternalImageId) {
