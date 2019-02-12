@@ -34,7 +34,7 @@ const pbars = []
 function initProgressBars(fileAmt) {
     if (fileAmt <= 0) return
     pbars.push(MultiProgress.newBar('Overall [:bar] :current/:total(:percent)', { total: fileAmt, complete: '#' }));
-    for (let i = 0; i < CONCUR_IMAGES_PROCESS; i++) {
+    for (let i = 0; i < Math.min(process.stderr.rows-1, CONCUR_IMAGES_PROCESS); i++) {
         const bar = MultiProgress.newBar(':label [:bar] :current/:total(:percent)', { total: 1 })
         bar._tick = (x = 1) => { bar.tick(x, { label: bar.label }) }
         bar.curr = 1
