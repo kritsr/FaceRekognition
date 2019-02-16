@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>Registration form</title>
+  <link rel="stylesheet" type="text/css" media="screen" href="main.css">
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+    integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+  <script src="main.js"></script>
+</head>
+
+<body>
+  <div class="container">
+    <form action="" class="needs-validation" novalidate>
+      <div class="form-group">
+        <label for="inputName">Name</label>
+        <input type="text" name="name" id="inputName" class="form-control" placeholder="Enter your name" required>
+        <label for="inputName" class="invalid-feedback"></label>
+      </div>
+      <div class="form-group">
+        <label for="inputMobile">Mobile Phone</label>
+        <input type="tel" name="mobile" id="inputMobile" class="form-control" placeholder="Enter your mobile no"
+          required>
+        <label for="inputMobile" class="invalid-feedback"></label>
+      </div>
+      <div class="form-group">
+        <label for="inputEmail">Email</label>
+        <input type="email" name="email" id="inputEmail" class="form-control" placeholder="Enter your Email" required>
+        <label for="inputEmail" class="invalid-feedback"></label>
+      </div>
+
+      <label>Please take your photos at the event and attach them here</label>
+      <div class="form-group">
+        <label for="inputImage1" class="col-form-label col-sm-2">Photo I</label>
+        <div class="custom-file col-sm-6">
+          <input type="file" name="inputImage1" id="inputImage1" class="custom-file-input" accept="image/jpeg" required>
+          <label for="inputImage1" class="custom-file-label">No image chosen</label>
+          <label for="inputImage1" class="invalid-feedback">Example invalid custom file feedback</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="inputImage2" class="col-form-label col-sm-2">Photo II</label>
+        <div class="custom-file col-sm-6">
+          <input type="file" name="inputImage2" id="inputImage2" class="custom-file-input" required>
+          <label for="inputImage2" class="custom-file-label">No image chosen</label>
+          <label for="inputImage2" class="invalid-feedback">Example invalid custom file feedback</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="inputImage3" class="col-form-label col-sm-2">Photo III</label>
+        <div class="custom-file col-sm-6">
+          <input type="file" name="inputImage3" id="inputImage3" class="custom-file-input">
+          <label for="inputImage3" class="custom-file-label">No image chosen</label>
+          <label for="inputImage3" class="invalid-feedback">Example invalid custom file feedback</label>
+        </div>
+      </div>
+
+
+      <button class="btn btn-primary btn-lg btn-block" type="submit">Send</button>
+    </form>
+  </div>
+</body>
+
+</html>
