@@ -1,3 +1,17 @@
 label {
   vertical-align: top;
 }
+
+body {
+  background-color: #444 !important;
+  background: url("bg.jpg") no-repeat center center fixed !important;
+  background-size: cover !important;
+}
+
+div.transbox {
+  background-color: rgba(255, 255, 255, 0.7);
+  box-shadow: 0px 0px 10px 5px rgba(50, 50, 50, .4);
+  padding: 10px;
+  margin-top: 10px;
+  border-radius: 10px;
+}

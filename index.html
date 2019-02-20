@@ -11,7 +11,9 @@
 </head>
 
 <body>
-  <div class="container">
+  <div class="container transbox">
+    <img src="logo.png" style="margin-left: auto; margin-right: auto;display: block">
+    <h2>Registration form</h2>
     <form action="" class="needs-validation" novalidate>
       <div class="form-group">
         <label for="inputName">Name</label>
@@ -29,12 +31,12 @@
         <input type="email" name="email" id="inputEmail" class="form-control" placeholder="Enter your Email" required>
         <label for="inputEmail" class="invalid-feedback"></label>
       </div>
-
       <label>Please take your photos at the event and attach them here</label>
       <div class="form-group">
         <label for="inputImage1" class="col-form-label col-sm-2">Photo I</label>
         <div class="custom-file col-sm-6">
-          <input type="file" name="inputImage1" id="inputImage1" class="custom-file-input" accept="image/jpeg" required>
+          <input type="file" name="inputImage1" id="inputImage1" class="custom-file-input" accept="image/jpeg"
+            required>
           <label for="inputImage1" class="custom-file-label">No image chosen</label>
           <label for="inputImage1" class="invalid-feedback">Example invalid custom file feedback</label>
         </div>
@@ -50,12 +52,11 @@
       <div class="form-group">
         <label for="inputImage3" class="col-form-label col-sm-2">Photo III</label>
         <div class="custom-file col-sm-6">
-          <input type="file" name="inputImage3" id="inputImage3" class="custom-file-input">
+          <input type="file" name="inputImage3" id="inputImage3" class="custom-file-input" required>
           <label for="inputImage3" class="custom-file-label">No image chosen</label>
           <label for="inputImage3" class="invalid-feedback">Example invalid custom file feedback</label>
         </div>
       </div>
-
 
       <button class="btn btn-primary btn-lg btn-block" type="submit">Send</button>
     </form>
