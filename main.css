@@ -16,3 +16,11 @@ div.transbox {
   margin-bottom: 10px;
   border-radius: 10px;
 }
+
+img.logo {
+  margin-left: auto;
+  margin-right: auto;
+  display: block;
+  height:auto;
+  max-width: 100%;
+}
