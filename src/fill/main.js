@@ -1,5 +1,34 @@
+// Initialize Firebase
+firebase.initializeApp({
+  apiKey: "AIzaSyDHtX9Ktpr4WYcoH78UGA8Rn0bFJEjIggQ",
+  authDomain: "f-web-42f24.firebaseapp.com",
+  databaseURL: "https://f-web-42f24.firebaseio.com",
+  projectId: "f-web-42f24",
+  storageBucket: "f-web-42f24.appspot.com",
+  messagingSenderId: "721726333104"
+});
+
+const db = firebase.firestore()
+
 function submitForm() {
-  console.log('SUBMITTTT')
+  const name = document.getElementById('inputName').value
+  const mobile = document.getElementById('inputMobile').value
+  const email = document.getElementById('inputEmail').value
+  const photo = [
+    document.getElementById('inputImage1').files[0],
+    document.getElementById('inputImage2').files[0],
+    document.getElementById('inputImage3').files[0]
+  ].filter(x => x)
+  db.collection('guests').add({
+    name, mobile, email
+  })
+  .then(docRef => {
+    console.log("Document written with ID: ", docRef.id)
+    location.href = 'success.html'
+  })
+  .catch(function (error) {
+    console.error("Error adding document: ", error);
+  })
 }
 
 window.addEventListener('load', function () {
