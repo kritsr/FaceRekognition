@@ -9,6 +9,7 @@ firebase.initializeApp({
 });
 
 const db = firebase.firestore()
+const storage = firebase.storage()
 
 function submitForm() {
   const name = document.getElementById('inputName').value
@@ -24,7 +25,13 @@ function submitForm() {
   })
   .then(docRef => {
     console.log("Document written with ID: ", docRef.id)
-    location.href = 'success.html'
+    Promise.all(photo.map((f,i)=>
+      storage.ref(`${docRef.id}/${i}`).put(f)
+    ))
+    .then(x=>{
+      console.log(x)
+      location.href = 'success.html'
+    })
   })
   .catch(function (error) {
     console.error("Error adding document: ", error);
