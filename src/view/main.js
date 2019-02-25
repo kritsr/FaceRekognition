@@ -30,15 +30,12 @@ db.collection("guests").get().then((querySnapshot) => {
     i += 1
     storage.ref(`${doc.id}/0`).getDownloadURL().then(url=>{
       document.getElementById(`${doc.id}-1`).href = url
-      console.log('s')
     })
     storage.ref(`${doc.id}/1`).getDownloadURL().then(url=>{
       document.getElementById(`${doc.id}-2`).href = url
-      console.log('s')
     })
     storage.ref(`${doc.id}/2`).getDownloadURL().then(url=>{
       document.getElementById(`${doc.id}-3`).href = url
-      console.log('s')
     })
   });
   content.innerHTML = htmls.join('')
