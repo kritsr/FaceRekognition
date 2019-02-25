@@ -6,12 +6,29 @@ firebase.initializeApp({
   projectId: "f-web-42f24",
   storageBucket: "f-web-42f24.appspot.com",
   messagingSenderId: "721726333104"
-});
+})
 
 const db = firebase.firestore()
 const storage = firebase.storage()
 
+function disableInput() {
+  const btn = document.getElementById('submitBtn')
+  if (btn.disabled) return true
+  btn.disabled = true
+  document.getElementById('submitBtnText').innerText = 'Saving...'
+  document.getElementById('submitSpinner').hidden = false
+  const inputs = [...document.getElementsByTagName('input')]
+  inputs.forEach(elem => {
+    elem.disabled = true
+  })
+  return false
+}
+
+let isSubmit = false
 function submitForm() {
+  if (isSubmit) return
+  isSubmit = true
+  if (disableInput()) return
   const name = document.getElementById('inputName').value
   const mobile = document.getElementById('inputMobile').value
   const email = document.getElementById('inputEmail').value
@@ -22,25 +39,20 @@ function submitForm() {
   ].filter(x => x)
   db.collection('guests').add({
     name, mobile, email
-  })
-  .then(docRef => {
-    console.log("Document written with ID: ", docRef.id)
-    Promise.all(photo.map((f,i)=>
+  }).then(docRef =>
+    Promise.all(photo.map((f, i) =>
       storage.ref(`${docRef.id}/${i}`).put(f)
     ))
-    .then(x=>{
-      console.log(x)
-      location.href = 'success.html'
-    })
-  })
-  .catch(function (error) {
-    console.error("Error adding document: ", error);
+  ).then(x => {
+    location.href = 'success.html'
+  }).catch(err => {
+    console.error("Error adding document: ", err)
   })
 }
 
 window.addEventListener('load', function () {
-  const forms = document.getElementsByClassName('needs-validation');
-  [...forms].filter(form => {
+  const forms = [...document.getElementsByClassName('needs-validation')]
+  forms.filter(form => {
     form.addEventListener('submit', event => {
       event.preventDefault()
       if (!form.checkValidity()) {
@@ -53,8 +65,8 @@ window.addEventListener('load', function () {
     }, false)
   })
 
-  const fileInputs = document.querySelectorAll('input[type=file]');
-  [...fileInputs].forEach(input => {
+  const fileInputs = [...document.querySelectorAll('input[type=file]')]
+  fileInputs.forEach(input => {
     const label = document.querySelector(`label.custom-file-label[for=${input.id}]`)
     const feedback = document.querySelector(`label.invalid-feedback[for=${input.id}]`)
     input.addEventListener('input', e => {
@@ -64,7 +76,7 @@ window.addEventListener('load', function () {
         return
       }
       const file = input.files[0]
-      label.innerText = file.name
+      if (file) label.innerText = file.name
       if (file.type !== 'image/jpeg') {
         input.setCustomValidity(feedback.innerText = 'Invalid file type')
         e.stopImmediatePropagation()
@@ -72,8 +84,8 @@ window.addEventListener('load', function () {
     })
   })
 
-  const inputs = document.getElementsByTagName('input');
-  [...inputs].forEach(input => {
+  const inputs = [...document.getElementsByTagName('input')]
+  inputs.forEach(input => {
     const feedback = document.querySelector(`label.invalid-feedback[for=${input.id}]`)
     if (feedback === null) return
     input.addEventListener('input', () => {

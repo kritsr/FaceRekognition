@@ -54,12 +54,15 @@
       <div class="form-group">
         <label for="inputImage3" class="col-form-label col-sm-2">Photo III</label>
         <div class="custom-file col-sm-6">
-          <input type="file" name="inputImage3" id="inputImage3" class="custom-file-input" accept="image/jpeg" required>
-          <label for="inputImage3" class="custom-file-label">No image chosen</label>
+          <input type="file" name="inputImage3" id="inputImage3" class="custom-file-input" accept="image/jpeg">
+          <label for="inputImage3" class="custom-file-label">No image chosen (Optional)</label>
           <label for="inputImage3" class="invalid-feedback">Example invalid custom file feedback</label>
         </div>
       </div>
-      <button class="btn btn-primary btn-lg btn-block" type="submit">Send</button>
+      <button class="btn btn-primary btn-lg btn-block" type="submit" id="submitBtn">
+          <span id="submitSpinner" class="spinner-border spinner-border" role="status" hidden aria-hidden="true"></span>
+          <span id="submitBtnText">Send</span>
+      </button>
     </form>
   </div>
 </body>
