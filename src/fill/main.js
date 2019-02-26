@@ -72,7 +72,7 @@ window.addEventListener('load', function () {
     input.addEventListener('change', e => {
       input.setCustomValidity('')
       if (input.files.length !== 1) {
-        label.innerText = 'No image chosen'
+        label.innerText = 'No image chosen' + (input.required?'':' (Optional)')
         return
       }
       const file = input.files[0]
