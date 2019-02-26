@@ -77,8 +77,8 @@ window.addEventListener('load', function () {
       }
       const file = input.files[0]
       if (file) label.innerText = file.name
-      if (file.type !== 'image/jpeg') {
-        input.setCustomValidity(feedback.innerText = 'Invalid file type')
+      if (file.type !== 'image/jpeg' && file.type !== 'image/png') {
+        input.setCustomValidity(feedback.innerText = 'Invalid file type. Please choose jpeg/png file.')
         e.stopImmediatePropagation()
       }
     })
