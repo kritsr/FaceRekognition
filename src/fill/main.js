@@ -69,7 +69,7 @@ window.addEventListener('load', function () {
   fileInputs.forEach(input => {
     const label = document.querySelector(`label.custom-file-label[for=${input.id}]`)
     const feedback = document.querySelector(`label.invalid-feedback[for=${input.id}]`)
-    input.addEventListener('input', e => {
+    input.addEventListener('change', e => {
       input.setCustomValidity('')
       if (input.files.length !== 1) {
         label.innerText = 'No image chosen'
